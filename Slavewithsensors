@@ -1,0 +1,179 @@
+#include <Wire.h>
+#include<NewPing.h>
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_PCD8544.h>//slave
+// Software SPI (slower updates, more flexible pin options):
+// pin 7 - Serial clock out (SCLK)
+// pin 6 - Serial data out (DIN)
+// pin 5 - Data/Command select (D/C)
+// pin 4 - LCD chip select (CS)
+// pin 3 - LCD reset (RST)
+Adafruit_PCD8544 display = Adafruit_PCD8544(7, 6, 5, 4, 3);
+#define LOGO16_GLCD_HEIGHT 16
+#define LOGO16_GLCD_WIDTH  16
+#define NODE_ADDRESS 6  // Change this unique address for each I2C slave node
+#define PAYLOAD_SIZE 2 // Number of bytes  expected to be received by the master I2C node
+#define pingSpeed 50 // Ping frequency (in milliseconds), fastest we should ping is about 35ms per sensor
+int pirPin1 = 2;  
+int pirPin2 = 13;  
+NewPing sonar1(8, 9, 200); // Sensor 1: trigger pin, echo pin, maximum distance in cm
+NewPing sonar2(11, 12, 200); // Sensor 2: same stuff
+unsigned long pingTimer1, pingTimer2;
+byte byteRead;
+int state = LOW;             // by default, no motion detected
+int val1 = LOW;                 // variable to store the sensor status (value)
+int val2 = LOW;
+int in1=sonar1.ping_in();
+int in2=sonar2.ping_in();
+String str,str1;
+byte nodePayload[PAYLOAD_SIZE];
+int num = 0;
+int num2 = 0;
+char cstr[16];
+char cstr1[16];
+void setup() {
+  Serial.begin(9600); 
+Wire.begin(NODE_ADDRESS);  // Activate I2C network
+  Wire.onRequest(requestEvent);
+
+
+ // Request attention of master node
+  
+  display.begin();
+   display.setContrast(60);
+   display.display(); // show splashscreen
+  delay(1000);
+  display.clearDisplay();
+
+  // clears the screen and buffer
+// text display tests
+  display.setTextSize(1.5);
+  display.setTextColor(BLACK);
+  display.setCursor(0,0);
+  display.println("WELCOME");
+  display.println("**Intrusion Alert System Using Arduino");
+   display.display();
+   display.clearDisplay();   // clears the screen and buffer
+  delay(500);
+    pinMode(pirPin1, INPUT);//PIR Sensor
+   pinMode(pirPin2, INPUT); //PIR Sensor
+  pinMode(10,OUTPUT);//Buzzer and Led
+  pingTimer1 = millis() + pingSpeed; // Sensor 1 fires after 100ms (pingSpeed)
+  pingTimer2 = pingTimer1 + (pingSpeed / 2); // Sensor 2 fires 50ms later
+}
+void loop() {
+ 
+  delay(1000);
+  nodePayload[0] = digitalRead(pirPin1); // I am sending Node address back.  Replace with any other data 
+  nodePayload[1] =  digitalRead(pirPin2);
+  delay(700); // Read pir pin and fit into 1 byte. Replace this line with your sensor value
+  if (millis() >= pingTimer1) {
+    pingTimer1 += pingSpeed; // Make sensor 1 fire again 100ms later (pingSpeed)
+    int in1 = sonar1.ping_in();
+    if (in1<4)
+    {alert();
+    }
+   // Serial.println(in1);
+     String s =String(in1);
+  //  Serial.println(s);
+     // int to char array
+  delay(200);
+  in1++;
+  str = String(in1);
+  str.toCharArray(cstr,16);
+  Serial.println(cstr);  
+  son(); }
+  if (millis() >= pingTimer2) {
+    pingTimer2 = pingTimer1 + (pingSpeed / 2); // Make sensor 2 fire again 50ms after sensor 1 fires
+    int in2 = sonar2.ping_in();
+    if(in2<5)
+    {
+      alert();
+    }
+   // Serial.println(in2);
+     String s1 =String(in2);
+    //Serial.println(s1);
+     // int to char array
+  delay(300);
+  in2++;
+  str1 = String(in2);
+  str1.toCharArray(cstr1,16);
+  Serial.println(cstr1);  
+  son();   // Both sensors pinged, process results here
+  }
+int Val1 = digitalRead(pirPin1);
+int Val2 = digitalRead(pirPin2);
+delay(100);
+Serial.println("starting to read PIR");
+  if(Val1 == HIGH) {
+    Serial.println("Motion Detected sensor 1");
+    digitalWrite(10,LOW);
+     pingd();
+ del();
+    delay(200);
+    digitalWrite(10,HIGH);
+   }
+  else 
+   Serial.println(" NO Motion Detected sensor 1");
+ 
+  if(Val2 == HIGH)  {
+    Serial.println("Motion Detected sensor 2");
+    digitalWrite(10,HIGH);
+     pingd();
+ del();
+    delay(200);
+    digitalWrite(10,LOW);
+   }
+  else Serial.println("No Motion Detected sensor 2");
+  //  check if data has been sent from the computer: ////bluetooth
+  if (Serial.available()) {
+  /* read the most recent byte */
+   byteRead = Serial.read();
+   /*ECHO the value that was read, back to the serial port. */
+    Serial.write(byteRead);
+   }}
+void pingd()
+ {
+  display.setTextSize(1.5);
+  display.setTextColor(BLACK);
+  display.setCursor(0,0);
+  display.println("PIR motion detected");
+  display.display();
+  delay(700);
+  display.clearDisplay();  
+ }
+ void del()
+ {
+  display.display();
+  delay(200);
+  display.clearDisplay();   
+ }
+ void son()
+ {
+  display.setTextSize(1);
+  display.setTextColor(BLACK);
+  display.setCursor(0,0);
+  display.println("dist.sensor 1&2 ::");
+  display.print(cstr);
+  display.print("...");
+ display.print(cstr1);
+  display.display();
+  delay(200);
+  display.clearDisplay();  
+    }
+void alert()
+{
+digitalWrite(10,HIGH);
+    delay(100);
+    digitalWrite(10,LOW);
+  display.println("                criticalzone");
+delay(400);
+}
+void requestEvent()
+{
+  Wire.write(nodePayload,PAYLOAD_SIZE);  
+  Serial.print("pir status ");  // for debugging purposes. 
+  Serial.println(nodePayload[1]); 
+ Serial.println(nodePayload[0]);  // for debugging purposes. 
+}
